@@ -1312,10 +1312,9 @@ const TAB_OPERATIONS = {
 function buildTabOptions({ tab, isSuspended }) {
   const options = [];
 
-  // Add all operations that work on individual tabs (skip those marked tabsOnly)
+  // Add all operations that work on individual tabs (include those marked tabsOnly)
   Object.entries(TAB_OPERATIONS).forEach(([key, operation]) => {
-    // Skip operations that are only for tabs
-    if (operation.tabsOnly) return;
+    // Include operations that are for tabs (tabsOnly or not tabsOnly)
 
     const option = {
       label: operation.label,
