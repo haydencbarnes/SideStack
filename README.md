@@ -1,5 +1,9 @@
 # SideStack Chrome Extension
 
+<div align="center">
+  <img src="icons/icon128.png" alt="SideStack Logo" width="128" height="128">
+</div>
+
 SideStack is a vertical tab manager for Google Chrome that provides an organized view of your browser tabs with search, suspend/restore functionality, and support for Chrome's native tab groups.
 
 ## Features
