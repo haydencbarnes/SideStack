@@ -10,8 +10,8 @@
   --border: #cbd5f5;
   --text: #0f172a;
   --text-muted: #475569;
-  --accent: #D3E3FE;
-  --accent-contrast: #041E49;
+  --accent: #d3e3fe;
+  --accent-contrast: #041e49;
 }
 
 body.dark {
@@ -20,7 +20,7 @@ body.dark {
   --border: #5f6368;
   --text: #e8eaed;
   --text-muted: #bdc1c6;
-  --accent: #004A78;
+  --accent: #004a78;
   --accent-contrast: #ffffff;
 }
 
@@ -32,7 +32,13 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   width: 100%;
   min-width: 320px;
   height: 100vh;
@@ -74,7 +80,9 @@ body {
   opacity: 0;
   pointer-events: none;
   transform: translateX(8px);
-  transition: opacity 120ms cubic-bezier(0.4, 0, 0.2, 1), transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    opacity 120ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .view.view--active {
@@ -111,7 +119,6 @@ body {
   color: var(--accent);
 }
 
-
 .toolbar {
   display: flex;
   flex-direction: column;
@@ -134,7 +141,7 @@ body {
 
 .search-box input:focus {
   outline: none;
-  border-color: #679DF7;
+  border-color: #679df7;
   border-width: 2px;
   padding: 7px 11px;
 }
@@ -176,7 +183,10 @@ body {
   border-radius: 12px;
   background: var(--group-color, var(--bg-panel));
   position: relative;
-  transition: filter 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    filter 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
   overflow: hidden;
 }
@@ -208,7 +218,11 @@ body {
   background: var(--bg-panel);
   position: relative;
   filter: brightness(1);
-  transition: filter 0.15s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    filter 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateZ(0);
 }
 
@@ -229,12 +243,15 @@ body {
   height: 0;
   opacity: 0;
   overflow: hidden;
-  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 
 .group-tabs::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -2px;
   top: 0;
@@ -259,7 +276,10 @@ body {
   background: var(--bg-panel);
   padding: 5px 12px;
   opacity: 1;
-  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 12px;
   margin: 0 auto;
   width: 100%;
@@ -295,7 +315,7 @@ body {
 
 .tab-item::before,
 .group-item::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -379,7 +399,11 @@ body.dark .group-tabs .tab-item.context-menu-target {
   color: #000;
   flex-shrink: 0;
   margin-right: 4px;
-  font-variation-settings: 'FILL' 0, 'wght' 600, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 20;
 }
 
 .tab-item .audio-indicator.show {
@@ -397,15 +421,19 @@ body.dark .tab-item .audio-indicator {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Material Symbols Outlined';
+  font-family: "Material Symbols Outlined";
   font-size: 16px;
   line-height: 1;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 20;
 }
 
 .tab-item .favicon.chrome-extensions::before {
   content: "extension";
-  color: #1A74E8;
+  color: #1a74e8;
 }
 
 .tab-item .favicon.chrome-settings::before {
@@ -434,16 +462,16 @@ body.dark .tab-item .audio-indicator {
 
 /* Theme colors for chrome icons */
 body:not(.dark) .tab-item .favicon.chrome-icon::before {
-  color: #5F6368;
+  color: #5f6368;
 }
 
 body.dark .tab-item .favicon.chrome-icon::before {
-  color: #E8EAED;
+  color: #e8eaed;
 }
 
 /* Keep extensions blue in both themes */
 .tab-item .favicon.chrome-extensions::before {
-  color: #1A74E8 !important;
+  color: #1a74e8 !important;
 }
 
 .tab-item .title,
@@ -461,7 +489,11 @@ body.dark .tab-item .favicon.chrome-icon::before {
   font-size: 1.2rem;
   flex-shrink: 0;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 300,
+    "GRAD" 0,
+    "opsz" 20;
   align-self: center;
   line-height: 1;
   margin-top: -1px;
@@ -469,13 +501,21 @@ body.dark .tab-item .favicon.chrome-icon::before {
 
 /* Dark mode: use darker outlined icons */
 body.dark .group-item .group-icon {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 20;
   color: #000000; /* Black in dark mode */
 }
 
 /* Dark mode hover: lighter filled icons */
 body.dark .group-item:hover .group-icon {
-  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 500,
+    "GRAD" 0,
+    "opsz" 20;
   color: #ffffff; /* White on hover */
 }
 
@@ -553,7 +593,11 @@ body.dark .group-item:hover .group-icon {
   background: var(--bg-panel);
   position: relative;
   filter: brightness(1);
-  transition: filter 0.15s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    filter 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateZ(0);
   color: var(--text);
   font-size: 0.9rem;
@@ -707,5 +751,3 @@ body.dark .group-toggle .title {
 .dark .group-item.tab-drop-target .group-toggle {
   background: rgba(76, 175, 80, 0.25);
 }
-
-

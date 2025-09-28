@@ -1,7 +1,8 @@
 {
   "name": "sidestack",
-  "version": "1.0.0",
+  "version": "0.1.2",
   "description": "SideStack is a vertical tab manager for Google Chrome that provides an organized view of your browser tabs with search, suspend/restore functionality, and support for Chrome's native tab groups.",
+  "type": "module",
   "main": "background.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

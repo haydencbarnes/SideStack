@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-09-28
+
+### Added
+- Expanded context menu options for tab groups - all individual tab actions now available for groups
+- Better context menu UX with smart positioning, click-outside detection, and keyboard support (Escape key)
+- Improved error handling and null safety in context menu operations
+
+### Fixed
+- Context menu positioning now stays within viewport bounds
+- Better click-outside detection prevents menus from getting stuck open
+- Removed code duplication by refactoring tab/group operations into reusable system
+
+### Changed
+- Code formatting and linting improvements with Prettier and ESLint
+- Updated build configuration for better ES module support
+
 ## [0.1.1] - 2025-09-28
 
 ### Fixed
