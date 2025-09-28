@@ -44,7 +44,6 @@ The extension icon will appear in the toolbar. Pin it for quicker access.
 
 - The background service worker lives in `background.js`
 - Popup UI assets are under `popup/`
-- A lightweight `nanoid` implementation sits in `vendor/`
 
 ### Code Quality
 
