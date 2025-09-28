@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SideStack",
-  "description": "Vertical tab manager with themes and advanced tab workflows.",
-  "version": "0.1.2",
+  "description": "DVertical tab manager with themes and advanced tab workflows.",
+  "version": "0.1.3",
   "permissions": [
     "tabs",
     "storage",
