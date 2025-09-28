@@ -1,0 +1,16 @@
+{
+  "name": "sidestack",
+  "version": "1.0.0",
+  "description": "SideStack is a vertical tab manager for Google Chrome focused on organizing browser sessions into **Spaces**. Each space keeps its own pinned tabs, suspended tabs, saved tab groups, and color theme so you can swap contexts quickly.",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^9.36.0",
+    "prettier": "^3.6.2"
+  }
+}

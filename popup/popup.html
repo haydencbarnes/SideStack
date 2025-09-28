@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SideStack</title>
+    <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <link rel="stylesheet" href="../settings/settings.css" />
+  </head>
+  <body>
+    <div id="app" class="app loading">
+      <main class="main-panel">
+        <div id="home-view" class="view view--active" data-view="home">
+          <header class="toolbar">
+            <div class="search-box">
+              <input id="search" type="search" placeholder="Search tabs" />
+            </div>
+          </header>
+          <section class="tab-list">
+            <ul id="tabs"></ul>
+          </section>
+        </div>
+        <div id="settings-view" class="view" data-view="settings" hidden></div>
+      </main>
+      <footer class="app-footer">
+        <button id="open-settings" type="button" title="Open extension settings" aria-label="Settings"><span class="material-symbols-outlined">settings</span></button>
+      </footer>
+    </div>
+    <template id="tab-item-template">
+      <li class="tab-item">
+        <span class="favicon"></span>
+        <span class="title"></span>
+        <span class="audio-indicator material-symbols-outlined">volume_up</span>
+        <span class="badge" hidden></span>
+        <button class="tab-close" title="Close tab">×</button>
+      </li>
+    </template>
+    <template id="group-item-template">
+      <li class="group-item">
+        <button class="group-toggle" type="button" aria-expanded="false">
+          <span class="group-icon material-symbols-outlined">folder</span>
+          <span class="title"></span>
+        </button>
+        <ul class="group-tabs" hidden></ul>
+      </li>
+    </template>
+    <div id="context-menu" class="context-menu" aria-hidden="true">
+      <ul id="context-menu-options"></ul>
+    </div>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
+
