@@ -26,6 +26,7 @@ const state = {
 
 const refs = {};
 const expandedGroupIds = new Set();
+const newlyExpandedGroupIds = new Set();
 let prefersColorSchemeMediaQuery = null;
 let systemThemeListenerAttached = false;
 let systemThemeChangeHandler = null;
@@ -693,8 +694,10 @@ function renderTabs() {
             const tabClone =
               tabTemplate.content.firstElementChild.cloneNode(true);
             tabClone.dataset.tabId = tab.id;
-            // Add staggered animation delay for smooth reveal
-            tabClone.style.animationDelay = `${index * 50}ms`;
+            // Add staggered animation only for newly expanded groups
+            if (newlyExpandedGroupIds.has(item.group.id)) {
+              tabClone.style.animation = `fadeInTab 0.28s cubic-bezier(0.4, 0, 0.2, 1) ${index * 50}ms forwards`;
+            }
             const favicon = tabClone.querySelector('.favicon');
             const tabTitle = tabClone.querySelector('.title');
             const audioIndicator = tabClone.querySelector('.audio-indicator');
@@ -788,13 +791,18 @@ function renderTabs() {
       list.appendChild(clone);
     }
   }
+
+  // Clear newly expanded groups after rendering
+  newlyExpandedGroupIds.clear();
 }
 
 function toggleGroupExpand(groupId) {
-  if (expandedGroupIds.has(groupId)) {
+  const wasExpanded = expandedGroupIds.has(groupId);
+  if (wasExpanded) {
     expandedGroupIds.delete(groupId);
   } else {
     expandedGroupIds.add(groupId);
+    newlyExpandedGroupIds.add(groupId);
   }
   renderTabs();
 }

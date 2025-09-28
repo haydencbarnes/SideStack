@@ -258,8 +258,7 @@ body {
 .group-tabs .tab-item {
   background: var(--bg-panel);
   padding: 5px 12px;
-  opacity: 0;
-  animation: fadeInTab 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 1;
   transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 12px;
   margin: 0 auto;
