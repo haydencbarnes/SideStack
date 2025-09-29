@@ -173,7 +173,7 @@ async function initSettingsPanel() {
 }
 
 function handleOpenSettingsClick() {
-  showView('settings');
+  showView(activeView === 'settings' ? 'home' : 'settings');
 }
 
 function showView(target) {
