@@ -175,10 +175,6 @@ function buildTemplate(variant, version) {
               <input type="checkbox" data-role="compact-mode">
             </label>
           </div>
-          <div class="settings-actions">
-            <button type="button" class="settings-button settings-button--primary" data-action="save-theme">Save Settings</button>
-            <button type="button" class="settings-button settings-button--secondary" data-action="change-panel-location">Change Panel Location</button>
-          </div>
         </section>
         <section class="settings-section">
           <h2>Features</h2>
@@ -188,8 +184,11 @@ function buildTemplate(variant, version) {
               <input type="checkbox" data-role="duplicate-detection">
             </label>
           </div>
+        </section>
+        <section class="settings-section">
           <div class="settings-actions">
             <button type="button" class="settings-button settings-button--primary" data-action="save-theme">Save Settings</button>
+            <button type="button" class="settings-button settings-button--secondary" data-action="change-panel-location">Change Panel Location</button>
           </div>
         </section>
       </div>
