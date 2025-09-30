@@ -367,6 +367,7 @@ async function getSettings() {
     response?.sidestack_settings_v1 ?? {
       themeMode: 'system',
       compactMode: true,
+      duplicateDetection: true,
     }
   );
 }
@@ -1090,8 +1091,17 @@ function normalizeUrlForComparison(url) {
   }
 }
 
-function updateDuplicateNotification() {
+async function updateDuplicateNotification() {
   if (!refs.duplicateNotification || !refs.duplicateCount) {
+    return;
+  }
+  
+  // Check if duplicate detection is enabled in settings
+  const settings = await getSettings();
+  const isEnabled = settings?.duplicateDetection ?? true;
+  
+  if (!isEnabled) {
+    refs.duplicateNotification.setAttribute('hidden', '');
     return;
   }
   

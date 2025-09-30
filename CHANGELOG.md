@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Duplicate tab detection with automatic notification banner
 - "Remove Older Ones" button to quickly close duplicate tabs with the same URL
 - Smart URL comparison that ignores query parameters and URL fragments
+- Settings toggle to enable/disable duplicate tab detection
 
 ### Removed
 - Unused "sessions" permission from manifest

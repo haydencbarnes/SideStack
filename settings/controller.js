@@ -41,6 +41,9 @@ export class SettingsView {
     this.elements.compactMode = this.container.querySelector(
       '[data-role=\'compact-mode\']',
     );
+    this.elements.duplicateDetection = this.container.querySelector(
+      '[data-role=\'duplicate-detection\']',
+    );
     this.elements.changePanelLocation = this.container.querySelector(
       '[data-action=\'change-panel-location\']',
     );
@@ -78,15 +81,21 @@ export class SettingsView {
     if (this.elements.compactMode) {
       this.elements.compactMode.checked = compactMode;
     }
+    const duplicateDetection = this.settings.duplicateDetection ?? true;
+    if (this.elements.duplicateDetection) {
+      this.elements.duplicateDetection.checked = duplicateDetection;
+    }
   }
 
   async handleSaveSettings() {
     const themeMode = this.elements.themeMode?.value ?? 'system';
     const compactMode = this.elements.compactMode?.checked ?? true;
+    const duplicateDetection = this.elements.duplicateDetection?.checked ?? true;
     const nextSettings = {
       ...this.settings,
       themeMode,
       compactMode,
+      duplicateDetection,
     };
     await this.setSettings(nextSettings);
     alert('Settings saved');
@@ -103,6 +112,7 @@ export class SettingsView {
     const fallback = {
       themeMode: 'system',
       compactMode: true,
+      duplicateDetection: true,
     };
     await chrome.storage.local.set({ [STORAGE_KEY]: fallback });
     return fallback;
@@ -168,6 +178,18 @@ function buildTemplate(variant, version) {
           <div class="settings-actions">
             <button type="button" class="settings-button settings-button--primary" data-action="save-theme">Save Settings</button>
             <button type="button" class="settings-button settings-button--secondary" data-action="change-panel-location">Change Panel Location</button>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h2>Features</h2>
+          <div class="settings-grid">
+            <label class="settings-field settings-field--inline">
+              <span>Duplicate tab detection</span>
+              <input type="checkbox" data-role="duplicate-detection">
+            </label>
+          </div>
+          <div class="settings-actions">
+            <button type="button" class="settings-button settings-button--primary" data-action="save-theme">Save Settings</button>
           </div>
         </section>
       </div>
