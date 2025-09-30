@@ -11,6 +11,9 @@ const SELECTORS = {
   groupTemplate: '#group-item-template',
   contextMenu: '#context-menu',
   contextMenuOptions: '#context-menu-options',
+  duplicateNotification: '#duplicate-notification',
+  duplicateCount: '#duplicate-count',
+  removeDuplicates: '#remove-duplicates',
 };
 const TAB_GROUP_ID_NONE = chrome.tabs?.TAB_GROUP_ID_NONE ?? -1;
 
@@ -22,6 +25,7 @@ const state = {
     data: null,
     type: null,
   },
+  duplicates: [],
 };
 
 const refs = {};
@@ -55,6 +59,7 @@ function attachEventHandlers() {
   refs.search?.addEventListener('input', handleSearchInput);
   refs.openSettings?.addEventListener('click', handleOpenSettingsClick);
   refs.createTab?.addEventListener('click', handleCreateTab);
+  refs.removeDuplicates?.addEventListener('click', handleRemoveDuplicates);
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleGlobalKeyDown);
   document.addEventListener('contextmenu', handleGlobalContextMenu);
@@ -443,6 +448,10 @@ function renderTabs() {
   if (!tabTemplate || !groupTemplate) {
     return;
   }
+  
+  // Detect and update duplicate notification
+  detectDuplicateTabs();
+  
   const searchTerm = normalizedSearch();
   // Simplified: pinned tabs are handled at the top level
   const pinnedSet = new Set();
@@ -1038,6 +1047,92 @@ function fuzzyScore(query, text) {
     textIndex = found + 1;
   }
   return score;
+}
+
+// Duplicate tab detection and removal
+function detectDuplicateTabs() {
+  const urlMap = new Map();
+  
+  // Group tabs by normalized URL
+  for (const tab of state.tabs) {
+    if (!tab.url) continue;
+    
+    // Normalize URL (remove trailing slash, hash, query params for comparison)
+    const normalizedUrl = normalizeUrlForComparison(tab.url);
+    
+    if (!urlMap.has(normalizedUrl)) {
+      urlMap.set(normalizedUrl, []);
+    }
+    urlMap.get(normalizedUrl).push(tab);
+  }
+  
+  // Find URLs with duplicates
+  const duplicateGroups = [];
+  for (const [url, tabs] of urlMap.entries()) {
+    if (tabs.length > 1) {
+      // Sort by tab ID (older tabs have lower IDs typically)
+      tabs.sort((a, b) => a.id - b.id);
+      duplicateGroups.push(tabs);
+    }
+  }
+  
+  state.duplicates = duplicateGroups;
+  updateDuplicateNotification();
+}
+
+function normalizeUrlForComparison(url) {
+  try {
+    const urlObj = new URL(url);
+    // Use origin + pathname for comparison (ignore hash and query params)
+    return `${urlObj.origin}${urlObj.pathname}`.replace(/\/$/, '');
+  } catch {
+    return url;
+  }
+}
+
+function updateDuplicateNotification() {
+  if (!refs.duplicateNotification || !refs.duplicateCount) {
+    return;
+  }
+  
+  const totalDuplicates = state.duplicates.reduce(
+    (sum, group) => sum + (group.length - 1), 
+    0
+  );
+  
+  if (totalDuplicates > 0) {
+    refs.duplicateCount.textContent = totalDuplicates;
+    refs.duplicateNotification.removeAttribute('hidden');
+  } else {
+    refs.duplicateNotification.setAttribute('hidden', '');
+  }
+}
+
+async function handleRemoveDuplicates() {
+  if (state.duplicates.length === 0) {
+    return;
+  }
+  
+  try {
+    const tabsToClose = [];
+    
+    // For each group of duplicates, keep the newest (last in sorted array) and close the rest
+    for (const group of state.duplicates) {
+      // Keep the last tab (newest), close all others
+      for (let i = 0; i < group.length - 1; i++) {
+        tabsToClose.push(group[i].id);
+      }
+    }
+    
+    if (tabsToClose.length > 0) {
+      await chrome.tabs.remove(tabsToClose);
+      state.duplicates = [];
+      await refreshTabsView();
+    }
+  } catch (error) {
+    console.error('Failed to remove duplicate tabs:', error);
+    notify('Failed to remove duplicate tabs');
+  }
 }
 
 // Expose selected helpers for debugging.

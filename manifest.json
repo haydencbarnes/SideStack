@@ -2,11 +2,10 @@
   "manifest_version": 3,
   "name": "SideStack",
   "description": "Vertical Tab Manager - Designed for Chrome",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "permissions": [
     "tabs",
     "storage",
-    "sessions",
     "tabGroups",
     "sidePanel"
   ],

@@ -23,6 +23,13 @@
         </div>
         <div id="settings-view" class="view" data-view="settings" hidden></div>
       </main>
+      <div id="duplicate-notification" class="duplicate-notification" hidden>
+        <div class="duplicate-content">
+          <span class="material-symbols-outlined">content_copy</span>
+          <span class="duplicate-text"><span id="duplicate-count">0</span> duplicate tab(s) detected</span>
+        </div>
+        <button id="remove-duplicates" class="remove-duplicates-btn">Remove Older Ones</button>
+      </div>
       <footer class="app-footer">
         <button id="open-settings" type="button" title="Open extension settings" aria-label="Settings"><span class="material-symbols-outlined">settings</span></button>
       </footer>
