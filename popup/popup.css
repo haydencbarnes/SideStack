@@ -141,13 +141,18 @@ body {
 
 .search-box input:focus {
   outline: none;
-  border: 2px solid #669DF6;
+  border: 2px solid #1A67D3;
   padding: 6px 10px;
 }
 
 /* Dark mode search box background */
 body.dark .search-box input {
   background: #282828;
+}
+
+/* Dark mode search box focus border */
+body.dark .search-box input:focus {
+  border-color: #669DF6;
 }
 
 .actions {
