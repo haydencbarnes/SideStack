@@ -154,7 +154,7 @@ body.dark .search-box input {
 /* Dark mode search box focus border */
 body.dark .search-box input:focus {
   border-color: #669DF6;
-  background: #282828;
+  background: #3C3C3C;
 }
 
 .actions {
