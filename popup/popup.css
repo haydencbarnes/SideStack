@@ -141,9 +141,6 @@ body {
 
 .search-box input:focus {
   outline: none;
-  border-color: #679df7;
-  border-width: 2px;
-  padding: 7px 11px;
 }
 
 /* Dark mode search box background */
