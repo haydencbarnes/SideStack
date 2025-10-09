@@ -146,6 +146,11 @@ body {
   padding: 7px 11px;
 }
 
+/* Dark mode search box background */
+body.dark .search-box input {
+  background: #282828;
+}
+
 .actions {
   display: none;
 }
