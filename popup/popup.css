@@ -135,7 +135,7 @@ body {
   padding: 8px 12px;
   border-radius: 12px;
   border: none;
-  background: var(--bg-panel);
+  background: #EDF2FB;
   color: var(--text);
 }
 
