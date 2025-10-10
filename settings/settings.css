@@ -20,8 +20,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 16px;
-  border-bottom: none;
+  padding: 24px 16px 16px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
 }
 
 .settings-header__group {
@@ -32,23 +33,24 @@
 
 .settings-title {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.3rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .settings-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 24px 16px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   border: none;
   border-radius: 0;
   padding: 0;
@@ -56,12 +58,13 @@
 }
 
 .settings-section h2 {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
-  margin: 0 0 8px 0;
+  margin: 0 0 12px 0;
+  padding: 0;
 }
 
 .settings-section__header {
@@ -119,38 +122,53 @@
 .settings-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   background: var(--bg-panel);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0;
+  overflow: hidden;
 }
 
 .settings-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-field:last-child {
+  border-bottom: none;
 }
 
 .settings-field span {
-  font-weight: 500;
+  font-weight: 400;
+  color: var(--text);
 }
 
 .settings-field select,
 .settings-field input[type="text"] {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  background: var(--bg);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-panel);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-family: inherit;
   outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.settings-field select:focus,
+.settings-field input[type="text"]:focus {
+  border-color: var(--accent);
 }
 
 .settings-field input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   margin: 0;
   cursor: pointer;
 }
@@ -166,12 +184,12 @@ body.dark .settings-field input[type="checkbox"] {
 }
 
 .settings-input--readonly {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   cursor: text;
 }
 
@@ -180,24 +198,27 @@ body.dark .settings-field input[type="checkbox"] {
 }
 
 .settings-field__description {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
-  margin-left: 0;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 
 .settings-field--inline {
-  flex: 1;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
+  gap: 16px;
 }
 
 .settings-actions {
   display: flex;
   gap: 12px;
   justify-content: flex-start;
-  padding-top: 8px;
+  padding: 16px;
+  background: var(--bg-panel);
+  border-radius: 8px;
+  border: 1px solid var(--border);
 }
 
 .settings-import-export {
@@ -219,59 +240,64 @@ body.dark .settings-field input[type="checkbox"] {
 }
 
 .settings-button {
-  border: none;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   background: var(--bg-panel);
   color: var(--text);
-  padding: 10px 18px;
-  font-size: 0.9rem;
+  padding: 8px 16px;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  margin-right: 8px;
-}
-
-.settings-button:last-child {
+  transition: all 0.15s ease;
   margin-right: 0;
 }
 
 .settings-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+  background: var(--bg);
 }
 
 /* Light mode primary button */
 body:not(.dark) .settings-button--primary {
   background: #1A67D3;
   color: white;
+  border-color: #1A67D3;
 }
 
 body:not(.dark) .settings-button--primary:hover {
   background: #1557b8;
+  border-color: #1557b8;
 }
 
 /* Dark mode primary button */
 body.dark .settings-button--primary {
   background: #669DF6;
   color: #000000;
+  border-color: #669DF6;
 }
 
 body.dark .settings-button--primary:hover {
   background: #7aabf7;
+  border-color: #7aabf7;
 }
 
 .settings-button--secondary {
   background: var(--bg-panel);
   color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.settings-button--secondary:hover {
+  background: var(--bg);
 }
 
 .settings-button--ghost {
   background: transparent;
   padding: 8px 12px;
+  border: none;
 }
 
 .settings-button--ghost:hover {
-  background: var(--bg-panel);
+  background: var(--bg);
 }
 
 .settings-button--danger {

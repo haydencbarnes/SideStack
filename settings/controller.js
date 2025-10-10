@@ -152,7 +152,9 @@ function buildTemplate(variant, version) {
         <section class="settings-section">
           <h2>About</h2>
           <div class="settings-grid">
-            <p style="margin: 0; color: var(--text-muted); font-size: 0.9rem;">SideStack organizes your tabs with smart grouping and suspension features.</p>
+            <div class="settings-field">
+              <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem; line-height: 1.5;">SideStack organizes your tabs with smart grouping and suspension features.</p>
+            </div>
             <label class="settings-field">
               <span>Version</span>
               <input type="text" value="${version}" readonly class="settings-input--readonly">
