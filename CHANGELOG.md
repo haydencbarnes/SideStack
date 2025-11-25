@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2025-11-25
+
+### Changed
+- Major performance improvements for faster tab list loading
+- Added debouncing to batch rapid tab events (reduces redundant refreshes)
+- Parallelized initialization (settings and tabs load concurrently)
+- Switched to event delegation (single handler vs. 6+ per tab element)
+- Batch DOM updates using DocumentFragment (single reflow vs. many)
+- Cached window ID and settings to avoid redundant async calls
+- Skip fuzzy scoring and sorting when not actively searching
+- Added preconnect hints for faster Google Fonts loading
+
+### Fixed
+- Fixed double-render on initial load (renderTabs was called twice)
+- Fixed unnecessary refresh on tab 'loading' status (now waits for 'complete')
+
 ## [0.1.6] - 2025-09-30
 
 ### Added

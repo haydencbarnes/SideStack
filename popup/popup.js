@@ -37,14 +37,28 @@ let systemThemeChangeHandler = null;
 let settingsViewInstance = null;
 let activeView = 'home';
 
+// Performance: cached values to avoid redundant async calls
+let cachedWindowId = null;
+let cachedSettings = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_TTL = 5000; // 5 seconds
+
+// Performance: debounce timer for tab events
+let refreshDebounceTimer = null;
+const REFRESH_DEBOUNCE_MS = 50;
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
   cacheRefs();
   attachEventHandlers();
   setupSystemThemeListener();
-  await initSettingsPanel();
+  
+  // Performance: Load tabs FIRST (most important), settings panel in parallel
+  // Don't await settings panel - it can initialize while tabs render
+  const settingsPromise = initSettingsPanel();
   await initialLoadState();
+  await settingsPromise; // Ensure it completes but don't block tabs
 }
 
 function cacheRefs() {
@@ -76,91 +90,202 @@ function attachEventHandlers() {
   chrome.tabGroups.onUpdated.addListener(handleTabGroupUpdated);
   chrome.tabGroups.onRemoved.addListener(handleTabGroupRemoved);
   if (chrome.tabGroups && chrome.tabGroups.onMoved) {
-    chrome.tabGroups.onMoved.addListener(async () => {
-      try {
-        await refreshTabsView();
-      } catch {}
-    });
+    chrome.tabGroups.onMoved.addListener(() => scheduleRefresh());
   }
 
-  // Event delegation for group drops
+  // Performance: Use event delegation for all tab/group interactions
   if (refs.tabsList) {
-    refs.tabsList.addEventListener(
-      'drop',
-      async (event) => {
-        event.preventDefault();
-        const groupItem = event.target.closest('.group-item');
-        if (groupItem) {
-          const groupId = parseInt(groupItem.dataset.groupId);
-          const group = state.tabGroups.find((g) => g.id === groupId);
-          if (group) {
-            const dragData = event.dataTransfer.getData('text/plain');
-            if (dragData.startsWith('group:')) {
-              handleGroupDrop(event, group);
-            } else {
-              const tabId = parseInt(dragData);
-              if (!isNaN(tabId) && tabId > 0) {
-                const tab = state.tabs.find((t) => t.id === tabId);
-                if (tab && tab.groupId !== group.id) {
-                  try {
-                    await chrome.tabs.group({
-                      tabIds: [tabId],
-                      groupId: group.id,
-                    });
-                    await refreshTabsView();
-                  } catch (error) {
-                    console.error('Failed to move tab to group:', error);
-                    notify('Failed to move tab to group');
-                  }
-                }
-              }
+    // Single click handler using delegation
+    refs.tabsList.addEventListener('click', handleTabsListClick);
+    
+    // Single drag handlers using delegation
+    refs.tabsList.addEventListener('dragstart', handleTabsListDragStart);
+    refs.tabsList.addEventListener('dragend', handleTabsListDragEnd);
+    refs.tabsList.addEventListener('dragover', handleTabsListDragOver);
+    refs.tabsList.addEventListener('dragleave', handleTabsListDragLeave);
+    refs.tabsList.addEventListener('drop', handleTabsListDrop);
+    
+    // Context menu delegation
+    refs.tabsList.addEventListener('contextmenu', handleTabsListContextMenu);
+  }
+}
+
+// Performance: Delegated event handlers
+function handleTabsListClick(event) {
+  // New tab button
+  const newTabBtn = event.target.closest('.new-tab-button');
+  if (newTabBtn) {
+    handleCreateTab();
+    return;
+  }
+  
+  const closeBtn = event.target.closest('.tab-close');
+  if (closeBtn) {
+    event.stopPropagation();
+    const tabItem = closeBtn.closest('.tab-item');
+    if (tabItem) {
+      const tabId = parseInt(tabItem.dataset.tabId);
+      chrome.tabs.remove(tabId).catch(() => {});
+    }
+    return;
+  }
+  
+  const groupToggle = event.target.closest('.group-toggle');
+  if (groupToggle) {
+    event.stopPropagation();
+    const groupItem = groupToggle.closest('.group-item');
+    if (groupItem) {
+      toggleGroupExpand(parseInt(groupItem.dataset.groupId));
+    }
+    return;
+  }
+  
+  const tabItem = event.target.closest('.tab-item');
+  if (tabItem) {
+    const tabId = parseInt(tabItem.dataset.tabId);
+    const tab = state.tabs.find(t => t.id === tabId);
+    if (tab) {
+      if (tab.discarded) {
+        restoreSuspendedTab(tabId);
+      } else {
+        chrome.tabs.update(tabId, { active: true });
+      }
+    }
+    return;
+  }
+}
+
+function handleTabsListDragStart(event) {
+  const tabItem = event.target.closest('.tab-item');
+  const groupItem = event.target.closest('.group-item');
+  
+  if (tabItem && !groupItem?.contains(tabItem.parentElement)) {
+    // Tab drag (not inside a group)
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', tabItem.dataset.tabId);
+    tabItem.classList.add('dragging');
+  } else if (groupItem && !tabItem) {
+    // Group drag
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `group:${groupItem.dataset.groupId}`);
+    groupItem.classList.add('dragging');
+  } else if (tabItem) {
+    // Tab inside group
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', tabItem.dataset.tabId);
+    tabItem.classList.add('dragging');
+  }
+}
+
+function handleTabsListDragEnd(event) {
+  const dragging = event.target.closest('.dragging');
+  if (dragging) dragging.classList.remove('dragging');
+  
+  // Clean up all drag indicators
+  refs.tabsList.querySelectorAll('.drag-over-above, .drag-over-below, .tab-drop-target').forEach(el => {
+    el.classList.remove('drag-over-above', 'drag-over-below', 'tab-drop-target');
+  });
+}
+
+function handleTabsListDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  
+  const tabItem = event.target.closest('.tab-item');
+  const groupItem = event.target.closest('.group-item');
+  
+  // Clean up previous indicators
+  refs.tabsList.querySelectorAll('.drag-over-above, .drag-over-below').forEach(el => {
+    if (el !== tabItem && el !== groupItem) {
+      el.classList.remove('drag-over-above', 'drag-over-below');
+    }
+  });
+  
+  const target = tabItem || groupItem;
+  if (target && !target.classList.contains('dragging')) {
+    const rect = target.getBoundingClientRect();
+    const isAbove = event.clientY < rect.top + rect.height / 2;
+    target.classList.toggle('drag-over-above', isAbove);
+    target.classList.toggle('drag-over-below', !isAbove);
+  }
+}
+
+function handleTabsListDragLeave(event) {
+  const target = event.target.closest('.tab-item, .group-item');
+  if (target) {
+    target.classList.remove('drag-over-above', 'drag-over-below', 'tab-drop-target');
+  }
+}
+
+async function handleTabsListDrop(event) {
+  event.preventDefault();
+  
+  const dragData = event.dataTransfer.getData('text/plain');
+  const tabItem = event.target.closest('.tab-item');
+  const groupItem = event.target.closest('.group-item');
+  
+  // Clean up drag indicators
+  refs.tabsList.querySelectorAll('.drag-over-above, .drag-over-below, .tab-drop-target').forEach(el => {
+    el.classList.remove('drag-over-above', 'drag-over-below', 'tab-drop-target');
+  });
+  
+  if (tabItem) {
+    const targetTabId = parseInt(tabItem.dataset.tabId);
+    const targetTab = state.tabs.find(t => t.id === targetTabId);
+    if (targetTab) {
+      if (dragData.startsWith('group:')) {
+        const groupId = parseInt(dragData.split(':')[1]);
+        await handleGroupDropOnTab(event, targetTab, groupId);
+      } else {
+        await handleTabDrop(event, targetTab);
+      }
+    }
+  } else if (groupItem) {
+    const groupId = parseInt(groupItem.dataset.groupId);
+    const group = state.tabGroups.find(g => g.id === groupId);
+    if (group) {
+      if (dragData.startsWith('group:')) {
+        await handleGroupDrop(event, group);
+      } else {
+        // Tab dropped on group - add to group
+        const tabId = parseInt(dragData);
+        if (!isNaN(tabId) && tabId > 0) {
+          const tab = state.tabs.find(t => t.id === tabId);
+          if (tab && tab.groupId !== group.id) {
+            try {
+              await chrome.tabs.group({ tabIds: [tabId], groupId: group.id });
+              await refreshTabsView();
+            } catch (error) {
+              console.error('Failed to move tab to group:', error);
             }
           }
         }
-      },
-      true,
-    );
+      }
+    }
+  }
+}
 
-    refs.tabsList.addEventListener(
-      'dragover',
-      (event) => {
-        const groupItem = event.target.closest('.group-item');
-        if (groupItem) {
-          const dragData = event.dataTransfer.getData('text/plain');
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-          if (!dragData.startsWith('group:')) {
-            // Tab drag over group
-            groupItem.classList.add('tab-drop-target');
-          } else {
-            // Group drag over group, existing logic
-            groupItem.classList.remove('tab-drop-target');
-          }
-        } else {
-          // Clean up any tab-drop-target classes when not over a group
-          document
-            .querySelectorAll('.group-item.tab-drop-target')
-            .forEach((item) => {
-              item.classList.remove('tab-drop-target');
-            });
-        }
-      },
-      true,
-    );
-
-    // Also, add a dragleave listener to clean up the class
-    refs.tabsList.addEventListener(
-      'dragleave',
-      (event) => {
-        if (event.target.closest('.group-item')) {
-          const groupItem = event.target.closest('.group-item');
-          if (groupItem) {
-            groupItem.classList.remove('tab-drop-target');
-          }
-        }
-      },
-      true,
-    );
+function handleTabsListContextMenu(event) {
+  const tabItem = event.target.closest('.tab-item');
+  const groupItem = event.target.closest('.group-item');
+  
+  if (tabItem) {
+    event.preventDefault();
+    const tabId = parseInt(tabItem.dataset.tabId);
+    const tab = state.tabs.find(t => t.id === tabId);
+    if (tab) {
+      openContextMenu(event, {
+        type: 'tab',
+        data: { tab, isSuspended: !!tab.discarded },
+      });
+    }
+  } else if (groupItem) {
+    event.preventDefault();
+    const groupId = parseInt(groupItem.dataset.groupId);
+    const group = state.tabGroups.find(g => g.id === groupId);
+    if (group) {
+      openContextMenu(event, { type: 'group', data: group });
+    }
   }
 }
 
@@ -172,7 +297,10 @@ async function initSettingsPanel() {
     container: refs.settingsView,
     variant: 'inline',
     onClose: () => showView('home'),
-    onChanged: () => refreshState(),
+    onChanged: () => {
+      invalidateSettingsCache();
+      refreshState();
+    },
   });
   await settingsViewInstance.init();
 }
@@ -249,95 +377,99 @@ async function loadTabsFromCache() {
   return false; // No cache available
 }
 
+// Performance: debounced refresh to batch rapid tab events
+function scheduleRefresh() {
+  if (refreshDebounceTimer) {
+    clearTimeout(refreshDebounceTimer);
+  }
+  refreshDebounceTimer = setTimeout(() => {
+    refreshDebounceTimer = null;
+    refreshTabsView();
+  }, REFRESH_DEBOUNCE_MS);
+}
+
 async function refreshTabsView() {
-  const currentWindow = await chrome.windows.getCurrent();
+  // Cache window ID to avoid repeated async calls
+  if (!cachedWindowId) {
+    const currentWindow = await chrome.windows.getCurrent();
+    cachedWindowId = currentWindow.id;
+  }
+  
   const [tabs, groups] = await Promise.all([
-    chrome.tabs.query({ currentWindow: true }),
-    chrome.tabGroups.query({ windowId: currentWindow.id }),
+    chrome.tabs.query({ windowId: cachedWindowId }),
+    chrome.tabGroups.query({ windowId: cachedWindowId }),
   ]);
   state.tabs = tabs.sort((a, b) => a.index - b.index);
   state.tabGroups = groups;
-  // Keep expanded group state local
   renderTabs();
 }
 
 async function loadTabsWithCache() {
-  // First try to load from cache for instant display
+  // Try cache first for instant display, but don't double-load
   const loadedFromCache = await loadTabsFromCache();
-
-  // Always refresh immediately to get latest data
-  await refreshTabsView();
-
-  // Clear the cache since we've refreshed
-  if (loadedFromCache) {
-    try {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_TABS_CACHE' });
-    } catch (error) {
-      console.warn('Failed to clear tabs cache:', error);
-    }
+  
+  if (!loadedFromCache) {
+    // No cache - load fresh data
+    await refreshTabsView();
+  } else {
+    // Cache hit - schedule a background refresh to ensure freshness
+    // Use longer delay since we have data to show
+    setTimeout(() => {
+      refreshTabsView();
+      chrome.runtime.sendMessage({ type: 'CLEAR_TABS_CACHE' }).catch(() => {});
+    }, 100);
   }
 }
 
-async function handleTabActivated(activeInfo) {
-  // Only refresh if this is for the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  if (activeInfo.windowId === currentWindow.id) {
-    await refreshTabsView();
+function handleTabActivated(activeInfo) {
+  // Use cached window ID - debounce to batch rapid events
+  if (!cachedWindowId || activeInfo.windowId === cachedWindowId) {
+    scheduleRefresh();
   }
 }
 
-async function handleTabUpdated(tabId, changeInfo, tab) {
-  // Only refresh if this is for the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  if (tab.windowId === currentWindow.id) {
-    await refreshTabsView();
+function handleTabUpdated(tabId, changeInfo, tab) {
+  // Only refresh on meaningful changes, not every status update
+  if (!cachedWindowId || tab.windowId === cachedWindowId) {
+    // Skip refresh for loading status changes - wait for complete
+    if (changeInfo.status === 'loading') return;
+    scheduleRefresh();
   }
 }
 
-async function handleTabCreated(tab) {
-  // Only refresh if this is for the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  if (tab.windowId === currentWindow.id) {
-    await refreshTabsView();
+function handleTabCreated(tab) {
+  if (!cachedWindowId || tab.windowId === cachedWindowId) {
+    scheduleRefresh();
   }
 }
 
-async function handleTabRemoved(tabId, removeInfo) {
-  // Only refresh if this is for the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  if (removeInfo.windowId === currentWindow.id) {
-    await refreshTabsView();
+function handleTabRemoved(tabId, removeInfo) {
+  if (!cachedWindowId || removeInfo.windowId === cachedWindowId) {
+    scheduleRefresh();
   }
 }
 
-async function handleTabGroupCreated(group) {
-  // Only refresh if this is for the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  if (group.windowId === currentWindow.id) {
-    await refreshTabsView();
+function handleTabGroupCreated(group) {
+  if (!cachedWindowId || group.windowId === cachedWindowId) {
+    scheduleRefresh();
   }
 }
 
-async function handleTabGroupUpdated(group) {
-  // Only refresh if this is for the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  if (group.windowId === currentWindow.id) {
-    await refreshTabsView();
+function handleTabGroupUpdated(group) {
+  if (!cachedWindowId || group.windowId === cachedWindowId) {
+    scheduleRefresh();
   }
 }
 
-async function handleTabGroupRemoved(group) {
-  // Only refresh if this is for the current window
-  const currentWindow = await chrome.windows.getCurrent();
-  if (group.windowId === currentWindow.id) {
-    await refreshTabsView();
+function handleTabGroupRemoved(group) {
+  if (!cachedWindowId || group.windowId === cachedWindowId) {
+    scheduleRefresh();
   }
 }
 
 async function renderAll() {
   await renderMode();
-  renderTabs();
-  applySearchFilter();
+  renderTabs(); // applySearchFilter is now integrated into renderTabs
 }
 
 async function renderMode() {
@@ -362,14 +494,26 @@ async function renderMode() {
 }
 
 async function getSettings() {
+  // Performance: cache settings to avoid repeated storage reads
+  const now = Date.now();
+  if (cachedSettings && (now - settingsCacheTime) < SETTINGS_CACHE_TTL) {
+    return cachedSettings;
+  }
+  
   const response = await chrome.storage.local.get('sidestack_settings_v1');
-  return (
-    response?.sidestack_settings_v1 ?? {
-      themeMode: 'system',
-      compactMode: true,
-      duplicateDetection: true,
-    }
-  );
+  cachedSettings = response?.sidestack_settings_v1 ?? {
+    themeMode: 'system',
+    compactMode: true,
+    duplicateDetection: true,
+  };
+  settingsCacheTime = now;
+  return cachedSettings;
+}
+
+// Invalidate settings cache when settings change
+function invalidateSettingsCache() {
+  cachedSettings = null;
+  settingsCacheTime = 0;
 }
 
 function setupSystemThemeListener() {
@@ -443,20 +587,19 @@ function renderTabs() {
   if (!list) {
     return;
   }
-  list.innerHTML = '';
+  
   const tabTemplate = document.querySelector(SELECTORS.tabTemplate);
   const groupTemplate = document.querySelector(SELECTORS.groupTemplate);
   if (!tabTemplate || !groupTemplate) {
     return;
   }
   
-  // Detect and update duplicate notification
+  // Performance: detect duplicates synchronously, update notification async
   detectDuplicateTabs();
+  updateDuplicateNotificationAsync();
   
   const searchTerm = normalizedSearch();
-  // Simplified: pinned tabs are handled at the top level
-  const pinnedSet = new Set();
-  const suspendedMap = new Map();
+  const isSearching = searchTerm.length > 0;
 
   // Create tabs by group mapping
   const tabsByGroup = new Map();
@@ -476,19 +619,19 @@ function renderTabs() {
   // Add individual tabs (not in groups) - separate pinned/unpinned
   for (const tab of state.tabs) {
     if (tab.groupId === TAB_GROUP_ID_NONE) {
-      const score = searchTerm
+      // Performance: only compute fuzzy score when actually searching
+      const score = isSearching
         ? fuzzyScore(searchTerm, `${tab.title ?? ''} ${tab.url ?? ''}`)
         : 1;
       if (score > 0) {
-        const isPinned = tab.pinned || pinnedSet.has(tab.id);
         const tabItem = {
           type: 'tab',
           tab,
           position: tab.index,
           score,
-          pinned: isPinned,
+          pinned: tab.pinned,
         };
-        if (isPinned) {
+        if (tab.pinned) {
           pinnedTabs.push(tabItem);
         } else {
           unpinnedTabs.push(tabItem);
@@ -505,7 +648,7 @@ function renderTabs() {
       const firstTab = groupTabs.reduce((earliest, tab) =>
         tab.index < earliest.index ? tab : earliest,
       );
-      const score = searchTerm
+      const score = isSearching
         ? fuzzyScore(searchTerm, `${group.title ?? ''}`)
         : 1;
       if (score > 0) {
@@ -523,139 +666,49 @@ function renderTabs() {
   // Sort all items by pinned status first, then by position/score
   const allItems = [...pinnedTabs, ...groupsToRender, ...unpinnedTabs];
 
-  allItems.sort((a, b) => {
-    // Pinned items come first
-    const aIsPinned = a.type === 'tab' ? a.pinned : false;
-    const bIsPinned = b.type === 'tab' ? b.pinned : false;
+  // Performance: only sort if searching (otherwise already sorted by position)
+  if (isSearching) {
+    allItems.sort((a, b) => {
+      const aIsPinned = a.type === 'tab' ? a.pinned : false;
+      const bIsPinned = b.type === 'tab' ? b.pinned : false;
+      if (aIsPinned && !bIsPinned) return -1;
+      if (!aIsPinned && bIsPinned) return 1;
+      if (a.score !== b.score) return b.score - a.score;
+      return a.position - b.position;
+    });
+  }
 
-    if (aIsPinned && !bIsPinned) return -1;
-    if (!aIsPinned && bIsPinned) return 1;
-
-    // Within same pinned status, sort by score then position
-    if (a.score !== b.score) return b.score - a.score;
-    return a.position - b.position;
-  });
-
-  const itemsToRender = allItems;
-
-  // Track if we've added the separator and new tab button
+  // Performance: Use DocumentFragment to batch all DOM insertions
+  const fragment = document.createDocumentFragment();
   let separatorAdded = false;
   let newTabButtonAdded = false;
 
   // Add new tab button at the beginning if no pinned tabs
-  if (pinnedTabs.length === 0 && !newTabButtonAdded) {
-    const newTabLi = document.createElement('li');
-    newTabLi.className = 'new-tab-button';
-    newTabLi.innerHTML =
-      '<span class="material-symbols-outlined">add</span> New Tab';
-    newTabLi.title = 'Open new tab';
-    newTabLi.addEventListener('click', handleCreateTab);
-    list.appendChild(newTabLi);
+  if (pinnedTabs.length === 0) {
+    fragment.appendChild(createNewTabButton());
     newTabButtonAdded = true;
   }
 
-  // Render items
-  for (const item of itemsToRender) {
-    // Add separator before first non-pinned item (either tab or group)
+  // Render items into fragment
+  for (const item of allItems) {
     const isItemPinned = item.type === 'tab' ? item.pinned : false;
+    
+    // Add separator before first non-pinned item
     if (!isItemPinned && pinnedTabs.length > 0 && !separatorAdded) {
       const separator = document.createElement('div');
       separator.className = 'tabs-separator';
-      list.appendChild(separator);
+      fragment.appendChild(separator);
       separatorAdded = true;
     }
 
     // Add new tab button after separator
-    if (
-      !isItemPinned &&
-      pinnedTabs.length > 0 &&
-      separatorAdded &&
-      !newTabButtonAdded
-    ) {
-      const newTabLi = document.createElement('li');
-      newTabLi.className = 'new-tab-button';
-      newTabLi.innerHTML =
-        '<span class="material-symbols-outlined">add</span> New Tab';
-      newTabLi.title = 'Open new tab';
-      newTabLi.addEventListener('click', handleCreateTab);
-      list.appendChild(newTabLi);
+    if (!isItemPinned && pinnedTabs.length > 0 && separatorAdded && !newTabButtonAdded) {
+      fragment.appendChild(createNewTabButton());
       newTabButtonAdded = true;
     }
 
     if (item.type === 'tab') {
-      const clone = tabTemplate.content.firstElementChild.cloneNode(true);
-      clone.dataset.tabId = item.tab.id;
-      const favicon = clone.querySelector('.favicon');
-      const title = clone.querySelector('.title');
-      const audioIndicator = clone.querySelector('.audio-indicator');
-      const badge = clone.querySelector('.badge');
-      const suspended = suspendedMap.get(String(item.tab.id));
-      if (favicon) {
-        const iconSource = item.tab.favIconUrl ?? suspended?.favIconUrl;
-        if (iconSource) {
-          favicon.style.backgroundImage = `url(${iconSource})`;
-          favicon.classList.remove('chrome-extensions');
-        } else {
-          // Use fallback for chrome:// URLs
-          const fallbackIcon = getFallbackFavicon(item.tab.url);
-          if (fallbackIcon) {
-            const chromePageClass = getChromePageClass(item.tab.url);
-            if (chromePageClass) {
-              favicon.className = 'favicon chrome-icon ' + chromePageClass;
-              favicon.style.backgroundImage = '';
-            } else {
-              favicon.style.backgroundImage = `url(${fallbackIcon})`;
-              favicon.className = 'favicon';
-            }
-          }
-        }
-      }
-      const displayTab = suspended ?? item.tab;
-      if (title) {
-        title.textContent = displayTab.title || displayTab.url || 'Untitled';
-      }
-      const isSuspendedByState = suspendedMap.has(String(item.tab.id));
-      const isDiscarded = !!item.tab.discarded;
-      const isSuspended = isSuspendedByState || isDiscarded;
-      clone.classList.toggle('suspended', isSuspended);
-      clone.classList.toggle('active', !!item.tab.active);
-      clone.setAttribute('draggable', 'true');
-      clone.addEventListener('dragstart', (event) =>
-        handleTabDragStart(event, item.tab),
-      );
-      clone.addEventListener('dragend', (event) =>
-        handleTabDragEnd(event, item.tab),
-      );
-      clone.addEventListener('dragover', (event) =>
-        handleTabDragOver(event, item.tab),
-      );
-      clone.addEventListener('drop', (event) => handleTabDrop(event, item.tab));
-      clone.addEventListener('click', () => {
-        if (isSuspended) {
-          restoreSuspendedTab(item.tab.id);
-          return;
-        }
-        chrome.tabs.update(item.tab.id, { active: true });
-      });
-      const closeButton = clone.querySelector('.tab-close');
-      if (closeButton) {
-        closeButton.addEventListener('click', (event) => {
-          event.stopPropagation();
-          chrome.tabs.remove(item.tab.id).catch(() => {});
-        });
-      }
-      clone.addEventListener('contextmenu', (event) =>
-        openTabContextMenu(event, item.tab, isSuspended),
-      );
-      // Audio indicator - show when tab has audio playing
-      if (audioIndicator) {
-        audioIndicator.classList.toggle('show', item.tab.audible === true);
-      }
-      // Badge is no longer shown for individual tabs - pinned tabs are grouped at top
-      if (badge) {
-        badge.hidden = true;
-      }
-      list.appendChild(clone);
+      fragment.appendChild(createTabElement(tabTemplate, item.tab));
     } else if (item.type === 'group') {
       const clone = groupTemplate.content.firstElementChild.cloneNode(true);
       const toggleButton = clone.querySelector('.group-toggle');
@@ -692,121 +745,90 @@ function renderTabs() {
       }
 
       if (tabsContainer && item.tabs.length && isExpanded) {
-        item.tabs
-          .map((tab) => ({
-            tab,
-            score: searchTerm
-              ? fuzzyScore(searchTerm, `${tab.title ?? ''} ${tab.url ?? ''}`)
-              : 1,
-          }))
-          .filter(({ score }) => score > 0)
-          .sort((a, b) =>
-            b.score === a.score ? a.tab.index - b.tab.index : b.score - a.score,
-          )
-          .forEach(({ tab }, index) => {
-            const tabClone =
-              tabTemplate.content.firstElementChild.cloneNode(true);
-            tabClone.dataset.tabId = tab.id;
-            // Add staggered animation only for newly expanded groups
-            if (newlyExpandedGroupIds.has(item.group.id)) {
-              tabClone.style.animation = `fadeInTab 0.28s cubic-bezier(0.4, 0, 0.2, 1) ${index * 50}ms forwards`;
-            }
-            const favicon = tabClone.querySelector('.favicon');
-            const tabTitle = tabClone.querySelector('.title');
-            const audioIndicator = tabClone.querySelector('.audio-indicator');
-            const badge = tabClone.querySelector('.badge');
-            if (favicon) {
-              const iconSource = tab.favIconUrl;
-              if (iconSource) {
-                favicon.style.backgroundImage = `url(${iconSource})`;
-                favicon.classList.remove('chrome-extensions');
-              } else {
-                // Use fallback for chrome:// URLs
-                const fallbackIcon = getFallbackFavicon(tab.url);
-                if (fallbackIcon) {
-                  const chromePageClass = getChromePageClass(tab.url);
-                  if (chromePageClass) {
-                    favicon.className =
-                      'favicon chrome-icon ' + chromePageClass;
-                    favicon.style.backgroundImage = '';
-                  } else {
-                    favicon.style.backgroundImage = `url(${fallbackIcon})`;
-                    favicon.className = 'favicon';
-                  }
-                }
-              }
-            }
-            if (tabTitle) {
-              tabTitle.textContent = tab.title || tab.url || 'Untitled';
-            }
-            // Audio indicator - show when tab has audio playing
-            if (audioIndicator) {
-              audioIndicator.classList.toggle('show', tab.audible === true);
-            }
-            // Badge is no longer shown for individual tabs - pinned tabs are grouped at top
-            if (badge) {
-              badge.hidden = true;
-            }
-            const isSuspended = !!tab.discarded;
-            tabClone.classList.toggle('suspended', isSuspended);
-            tabClone.classList.toggle('active', !!tab.active);
-            tabClone.setAttribute('draggable', 'true');
-            tabClone.addEventListener('dragstart', (event) =>
-              handleTabDragStart(event, tab),
-            );
-            tabClone.addEventListener('dragend', (event) =>
-              handleTabDragEnd(event, tab),
-            );
-            tabClone.addEventListener('dragover', (event) =>
-              handleTabDragOver(event, tab),
-            );
-            tabClone.addEventListener('drop', (event) =>
-              handleTabDrop(event, tab),
-            );
-            tabClone.addEventListener('click', () => {
-              if (isSuspended) {
-                restoreSuspendedTab(tab.id);
-                return;
-              }
-              chrome.tabs.update(tab.id, { active: true });
-            });
-            const closeButton = tabClone.querySelector('.tab-close');
-            if (closeButton) {
-              closeButton.addEventListener('click', (event) => {
-                event.stopPropagation();
-                chrome.tabs.remove(tab.id).catch(() => {});
-              });
-            }
-            tabClone.addEventListener('contextmenu', (event) =>
-              openTabContextMenu(event, tab, isSuspended),
-            );
-            tabsContainer.appendChild(tabClone);
-          });
+        // Performance: Filter and sort only if searching
+        let tabsToRender = item.tabs;
+        if (isSearching) {
+          tabsToRender = item.tabs
+            .map((tab) => ({
+              tab,
+              score: fuzzyScore(searchTerm, `${tab.title ?? ''} ${tab.url ?? ''}`),
+            }))
+            .filter(({ score }) => score > 0)
+            .sort((a, b) => b.score === a.score ? a.tab.index - b.tab.index : b.score - a.score)
+            .map(({ tab }) => tab);
+        }
+        
+        const isNewlyExpanded = newlyExpandedGroupIds.has(item.group.id);
+        tabsToRender.forEach((tab, index) => {
+          const tabClone = createTabElement(tabTemplate, tab);
+          if (isNewlyExpanded) {
+            tabClone.style.animation = `fadeInTab 0.28s cubic-bezier(0.4, 0, 0.2, 1) ${index * 50}ms forwards`;
+          }
+          tabsContainer.appendChild(tabClone);
+        });
       }
 
-      toggleButton?.addEventListener('click', (event) => {
-        event.stopPropagation();
-        toggleGroupExpand(item.group.id);
-      });
-
-      clone.addEventListener('dragstart', (event) =>
-        handleGroupDragStart(event, item.group),
-      );
-      clone.addEventListener('dragend', (event) =>
-        handleGroupDragEnd(event, item.group),
-      );
-      clone.addEventListener('dragover', (event) =>
-        handleGroupDragOver(event, item.group),
-      );
-      clone.addEventListener('contextmenu', (event) =>
-        openGroupContextMenu(event, item.group),
-      );
-      list.appendChild(clone);
+      // Event listeners handled by delegation
+      fragment.appendChild(clone);
     }
   }
 
+  // Performance: Single DOM update - clear and append all at once
+  list.innerHTML = '';
+  list.appendChild(fragment);
+  
   // Clear newly expanded groups after rendering
   newlyExpandedGroupIds.clear();
+}
+
+// Performance: Reusable helper to create tab elements
+function createTabElement(template, tab) {
+  const clone = template.content.firstElementChild.cloneNode(true);
+  clone.dataset.tabId = tab.id;
+  
+  const favicon = clone.querySelector('.favicon');
+  const title = clone.querySelector('.title');
+  const audioIndicator = clone.querySelector('.audio-indicator');
+  const badge = clone.querySelector('.badge');
+  
+  if (favicon) {
+    if (tab.favIconUrl) {
+      favicon.style.backgroundImage = `url(${tab.favIconUrl})`;
+    } else if (tab.url?.startsWith('chrome://')) {
+      // Only compute fallback for chrome:// URLs
+      const chromePageClass = getChromePageClass(tab.url);
+      if (chromePageClass) {
+        favicon.className = 'favicon chrome-icon ' + chromePageClass;
+      }
+    }
+  }
+  
+  if (title) {
+    title.textContent = tab.title || tab.url || 'Untitled';
+  }
+  
+  if (audioIndicator) {
+    audioIndicator.classList.toggle('show', tab.audible === true);
+  }
+  
+  if (badge) {
+    badge.hidden = true;
+  }
+  
+  clone.classList.toggle('suspended', !!tab.discarded);
+  clone.classList.toggle('active', !!tab.active);
+  clone.setAttribute('draggable', 'true');
+  
+  return clone;
+}
+
+function createNewTabButton() {
+  const li = document.createElement('li');
+  li.className = 'new-tab-button';
+  li.innerHTML = '<span class="material-symbols-outlined">add</span> New Tab';
+  li.title = 'Open new tab';
+  // Event handled by delegation now
+  return li;
 }
 
 function toggleGroupExpand(groupId) {
@@ -941,6 +963,7 @@ function notify(message) {
   console.warn(message);
 }
 
+// eslint-disable-next-line no-unused-vars -- kept for potential future use with data URIs
 function getFallbackFavicon(url) {
   if (!url) return null;
 
@@ -1069,7 +1092,7 @@ function detectDuplicateTabs() {
   
   // Find URLs with duplicates
   const duplicateGroups = [];
-  for (const [url, tabs] of urlMap.entries()) {
+  for (const [, tabs] of urlMap.entries()) {
     if (tabs.length > 1) {
       // Sort by tab ID (older tabs have lower IDs typically)
       tabs.sort((a, b) => a.id - b.id);
@@ -1091,12 +1114,18 @@ function normalizeUrlForComparison(url) {
   }
 }
 
+// Performance: non-blocking duplicate notification update
+function updateDuplicateNotificationAsync() {
+  // Fire and forget - don't block render
+  updateDuplicateNotification();
+}
+
 async function updateDuplicateNotification() {
   if (!refs.duplicateNotification || !refs.duplicateCount) {
     return;
   }
   
-  // Check if duplicate detection is enabled in settings
+  // Uses cached settings - fast path
   const settings = await getSettings();
   const isEnabled = settings?.duplicateDetection ?? true;
   
@@ -1200,21 +1229,7 @@ function closeContextMenu() {
   state.context = null;
 }
 
-function openTabContextMenu(event, tab, isSuspended = false) {
-  event.preventDefault();
-  openContextMenu(event, {
-    type: 'tab',
-    data: { tab, isSuspended },
-  });
-}
-
-function openGroupContextMenu(event, group) {
-  event.preventDefault();
-  openContextMenu(event, {
-    type: 'group',
-    data: group,
-  });
-}
+// Note: openTabContextMenu and openGroupContextMenu replaced by handleTabsListContextMenu delegation
 
 function openContextMenu(event, { type, data }) {
   if (!refs.contextMenu || !refs.contextMenuOptions) {
@@ -1313,7 +1328,7 @@ const TAB_OPERATIONS = {
       );
       await refreshTabsView();
     },
-    getGroupLabel: (group) => {
+    getGroupLabel: () => {
       // We could check if all tabs are pinned, but for simplicity, just use "Pin All Tabs"
       return 'Pin All Tabs';
     },
@@ -1511,62 +1526,7 @@ function buildGroupOptions(group) {
   return options.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function handleTabDragStart(event, tab) {
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/plain', tab.id.toString());
-  event.currentTarget.classList.add('dragging');
-}
-
-function handleTabDragEnd(event, _tab) {
-  event.currentTarget.classList.remove('dragging');
-
-  // Remove drag-over classes from all items
-  const tabItems = document.querySelectorAll('.tab-item');
-  const groupItems = document.querySelectorAll('.group-item');
-  tabItems.forEach((item) => {
-    item.classList.remove('drag-over-above');
-    item.classList.remove('drag-over-below');
-  });
-  groupItems.forEach((item) => {
-    item.classList.remove('drag-over-above');
-    item.classList.remove('drag-over-below');
-    item.classList.remove('tab-drop-target');
-  });
-}
-
-function handleTabDragOver(event, _tab) {
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
-
-  const draggedElement = document.querySelector('.dragging');
-  if (!draggedElement || draggedElement === event.currentTarget) {
-    return;
-  }
-
-  // Check if we're dragging a tab (not a group)
-  const dragData = event.dataTransfer.getData('text/plain');
-  if (dragData.startsWith('group:')) {
-    return; // Don't allow dropping groups on individual tabs
-  }
-
-  // Remove previous drag-over indicators
-  const tabItems = document.querySelectorAll('.tab-item');
-  tabItems.forEach((item) => {
-    item.classList.remove('drag-over-above');
-    item.classList.remove('drag-over-below');
-  });
-
-  // Determine if we're dropping above or below current item
-  const rect = event.currentTarget.getBoundingClientRect();
-  const midpoint = rect.top + rect.height / 2;
-  const isAbove = event.clientY < midpoint;
-
-  if (isAbove) {
-    event.currentTarget.classList.add('drag-over-above');
-  } else {
-    event.currentTarget.classList.add('drag-over-below');
-  }
-}
+// Note: Old individual drag handlers removed - using event delegation instead
 
 async function handleTabDrop(event, targetTab) {
   event.preventDefault();
@@ -1713,66 +1673,7 @@ async function handleGroupDropOnTab(event, targetTab, draggedGroupId) {
   }
 }
 
-function handleGroupDragStart(event, group) {
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/plain', `group:${group.id}`);
-  event.currentTarget.classList.add('dragging');
-}
-
-function handleGroupDragEnd(event, _group) {
-  event.currentTarget.classList.remove('dragging');
-
-  // Remove drag-over classes from all items
-  const tabItems = document.querySelectorAll('.tab-item');
-  const groupItems = document.querySelectorAll('.group-item');
-  tabItems.forEach((item) => {
-    item.classList.remove('drag-over-above');
-    item.classList.remove('drag-over-below');
-  });
-  groupItems.forEach((item) => {
-    item.classList.remove('drag-over-above');
-    item.classList.remove('drag-over-below');
-  });
-}
-
-function handleGroupDragOver(event, _group) {
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
-
-  const draggedElement = document.querySelector('.dragging');
-  if (!draggedElement || draggedElement === event.currentTarget) {
-    return;
-  }
-
-  // Check if we're dragging a group (not a tab)
-  const dragData = event.dataTransfer.getData('text/plain');
-  if (!dragData.startsWith('group:')) {
-    return; // Don't allow dropping tabs on groups
-  }
-
-  // Remove previous drag-over indicators
-  const tabItems = document.querySelectorAll('.tab-item');
-  const groupItems = document.querySelectorAll('.group-item');
-  tabItems.forEach((item) => {
-    item.classList.remove('drag-over-above');
-    item.classList.remove('drag-over-below');
-  });
-  groupItems.forEach((item) => {
-    item.classList.remove('drag-over-above');
-    item.classList.remove('drag-over-below');
-  });
-
-  // Determine if we're dropping above or below current item
-  const rect = event.currentTarget.getBoundingClientRect();
-  const midpoint = rect.top + rect.height / 2;
-  const isAbove = event.clientY < midpoint;
-
-  if (isAbove) {
-    event.currentTarget.classList.add('drag-over-above');
-  } else {
-    event.currentTarget.classList.add('drag-over-below');
-  }
-}
+// Note: Old individual group drag handlers removed - using event delegation instead
 
 async function handleGroupDrop(event, targetGroup) {
   event.preventDefault();
