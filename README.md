@@ -1,3 +1,5 @@
+## IMPORTANT: I have switched over to using the Helium browser which now includes a vertical tabs integration, so further work on this project will not be completed.
+
 # SideStack Chrome Extension
 
 <div align="center">
